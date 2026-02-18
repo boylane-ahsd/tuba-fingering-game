@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tuba Fingering Quiz</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; background: #f5f5f5; padding: 16px; }
+    h1 { margin-bottom: 6px; }
+    #score { font-size: 18px; margin-bottom: 12px; }
+    #question { font-size: 22px; margin: 12px 0; min-height: 44px; }
+    .answers { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+    .answer {
+      width: 140px; height: 140px;
+      border: 2px solid #444; border-radius: 8px; background: #fff;
+      display:flex; align-items:center; justify-content:center;
+      cursor: pointer; user-select: none; transition: transform .08s ease, background .18s ease, border-color .18s ease;
+    }
+    .answer img { max-width: 100%; max-height: 100%; pointer-events: none; user-select: none; }
+    .answer:active { transform: scale(.98); }
+    .correct { border-color: #2e7d32; background: #c8e6c9; }
+    .wrong   { border-color: #c62828; background: #ffcdd2; }
+    #result { font-size: 18px; margin-top: 12px; min-height: 24px; }
+    #nextBtn { margin-top: 16px; padding: 10px 18px; font-size: 16px; cursor: pointer; }
+    .hidden { display: none; }
+    #finalMessage { font-size: 20px; margin-top: 20px; }
+    #finalMessage a { color: #1a73e8; text-decoration: underline; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<h1>Tuba Fingering Quiz</h1>
+<div id="score">Score: 0</div>
+<div id="question"></div>
+<div class="answers" id="answers"></div>
+<div id="result"></div>
+<button id="nextBtn" class="hidden">Next Question</button>
+<div id="finalMessage" class="hidden"></div>
+
+<script>
+
+// ----- CONFIG -----
+
+const fingerings = {
+  "B♭": "tuba_Bb.png",
+  "C":  "tuba_C.png",
+  "D":  "tuba_D.png",
+  "E♭": "tuba_Eb.png",
+  "F":  "tuba_F.png",
+  "G":  "tuba_G.png",
+  "A":  "tuba_A.png"
+};
+
+const staffNotes = {
+  "B♭": "note_Bb.png",
+  "C":  "note_C.png",
+  "D":  "note_D.png",
+  "E♭": "note_Eb.png",
+  "F":  "note_F.png",
+  "G":  "note_G.png",
+  "A":  "note_A.png"
+};
+
+const levels = {
+  1: ["B♭","C"],
+  2: ["B♭","C","D"],
+  3: ["B♭","C","D","E♭"],
+  4: ["B♭","C","D","E♭","F"],
+  5: ["B♭","C","D","E♭","F","G"],
+  6: ["B♭","C","D","E♭","F","G","A"]
+};
+
+const googleFormBaseURL = "https://docs.google.com/forms/d/e/1FAIpQLSdkx0XU5B2hWMNG39N7k6NG9u_gLpM4vstsE7cLsFULGo1wqw/viewform?usp=preview";
+
+// ----- GAME STATE -----
+
+let currentLevel = 1;
+let questionCount = 0;
+const maxQuestions = 10;
+let score = 0;
+let roundType = 1;
+
+let lastQuestion = null;
+let lastOrder = null;
+
+// ----- UTILITIES -----
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function arraysEqual(a, b) {
+  if (!b) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+// ----- CONFLICT FILTER -----
+
+function applyConflictFilter(notes) {
+
+  let filtered = notes.slice();
+
+  // Bb/F conflict
+  if (filtered.includes("B♭") && filtered.includes("F")) {
+    if (Math.random() < 0.5) {
+      filtered = filtered.filter(n => n !== "F");
+    } else {
+      filtered = filtered.filter(n => n !== "B♭");
+    }
+  }
+
+  // D/G conflict
+  if (filtered.includes("D") && filtered.includes("G")) {
+    if (Math.random() < 0.5) {
+      filtered = filtered.filter(n => n !== "G");
+    } else {
+      filtered = filtered.filter(n => n !== "D");
+    }
+  }
+
+  return filtered;
+}
+
+// ----- QUESTION PICKER -----
+
+function pickQuestionAndOptions() {
+
+  const baseNotes = levels[currentLevel];
+  const notes = applyConflictFilter(baseNotes);
+
+  const note = notes[Math.floor(Math.random() * notes.length)];
+
+  let options = shuffle(notes);
+  let attempts = 0;
+
+  while (lastQuestion === note && arraysEqual(options, lastOrder) && attempts < 50) {
+    options = shuffle(notes);
+    attempts++;
+  }
+
+  lastQuestion = note;
+  lastOrder = options.slice();
+
+  return { note, options };
+}
+
+// ----- DISPLAY -----
+
+function showQuestion() {
+
+  document.getElementById("result").textContent = "";
+  document.getElementById("nextBtn").classList.add("hidden");
+
+  const { note, options } = pickQuestionAndOptions();
+  const qDiv = document.getElementById("question");
+
+  if (roundType === 1) {
+    qDiv.textContent = `Which fingering plays note: ${note}?`;
+  } else {
+    const staffSrc = staffNotes[note];
+    qDiv.innerHTML = `Which fingering plays this note?<br><img src="${staffSrc}" alt="Note ${note}" style="height:90px;">`;
+  }
+
+  const answersDiv = document.getElementById("answers");
+  answersDiv.innerHTML = "";
+
+  options.forEach(opt => {
+    const el = document.createElement("div");
+    el.className = "answer";
+    el.dataset.note = opt;
+
+    const img = document.createElement("img");
+    img.src = fingerings[opt];
+    img.alt = `Fingering for ${opt}`;
+    el.appendChild(img);
+
+    el.addEventListener("click", onAnswerClick);
+    answersDiv.appendChild(el);
+  });
+
+  document.getElementById("score").textContent = `Score: ${score}`;
+}
+
+// ----- ANSWER HANDLER -----
+
+function onAnswerClick(e) {
+
+  const clicked = e.currentTarget;
+  const selected = clicked.dataset.note;
+  const correct = lastQuestion;
+
+  const all = document.querySelectorAll(".answer");
+  all.forEach(btn => btn.style.pointerEvents = "none");
+
+  all.forEach(btn => {
+    if (btn.dataset.note === correct) btn.classList.add("correct");
+  });
+
+  if (selected !== correct) {
+    clicked.classList.add("wrong");
+    document.getElementById("result").textContent =
+      `❌ Wrong. Correct answer: ${correct}`;
+  } else {
+    document.getElementById("result").textContent = "✅ Correct!";
+    score++;
+    document.getElementById("score").textContent = `Score: ${score}`;
+  }
+
+  document.getElementById("nextBtn").classList.remove("hidden");
+}
+
+// ----- NEXT BUTTON -----
+
+document.getElementById("nextBtn").addEventListener("click", () => {
+
+  questionCount++;
+
+  if (questionCount >= maxQuestions) {
+    questionCount = 0;
+
+    if (roundType === 1) {
+      roundType = 2;
+      alert("Now try the same notes by reading them on the staff!");
+    } else {
+      roundType = 1;
+      currentLevel++;
+
+      if (!levels[currentLevel]) {
+        finishGame();
+        return;
+      } else {
+        alert(`Level up! Now playing level ${currentLevel}`);
+      }
+    }
+  }
+
+  showQuestion();
+});
+
+// ----- FINISH GAME -----
+
+function finishGame() {
+
+  document.getElementById("question").textContent = "";
+  document.getElementById("answers").innerHTML = "";
+  document.getElementById("nextBtn").classList.add("hidden");
+  document.getElementById("result").textContent = "";
+
+  const final = document.getElementById("finalMessage");
+
+  final.innerHTML = `
+    🎉 <strong>Congratulations — you finished the challenge!</strong><br>
+    You answered <strong>${score}</strong> questions correctly.<br><br>
+    <a href="https://docs.google.com/forms/d/e/1FAIpQLSdkx0XU5B2hWMNG39N7k6NG9u_gLpM4vstsE7cLsFULGo1wqw/viewform?usp=preview" target="_blank">👉 Click here to submit your score</a>
+  `;
+
+  final.classList.remove("hidden");
+}
+
+showQuestion();
+
+</script>
+</body>
+</html>
